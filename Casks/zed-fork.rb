@@ -22,12 +22,9 @@ cask "zed-fork" do
   # Unsigned/unnotarized (ad-hoc signed only), and rebuilt in place on every
   # push to main - `brew reinstall --cask zed-fork` picks up the latest build,
   # since `version :latest` + `sha256 :no_check` means `brew upgrade` won't
-  # detect a change on its own.
-  postflight_steps do
-    system_command "/usr/bin/xattr",
-                    args: ["-cr", "#{appdir}/Zed Dev.app"],
-                    sudo:  false
-  end
+  # detect a change on its own. No quarantine-stripping step: curl downloads
+  # (unlike browser downloads) don't set com.apple.quarantine in the first
+  # place, so there's nothing to strip.
 
   # No `zap` block: this build intentionally shares its settings, database,
   # and history with a regular Zed install (~/Library/Application

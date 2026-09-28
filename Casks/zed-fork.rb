@@ -2,13 +2,20 @@ cask "zed-fork" do
   version :latest
   sha256 :no_check
 
-  url "https://gitea.xetk.co.uk/xetk/zed/releases/download/nightly/Zed-Dev.dmg"
+  # This Gitea instance requires sign-in even for public-repo release
+  # downloads, so a plain `url` can't fetch it. Read the token tea already
+  # has stored locally rather than hardcoding a secret into this tap.
+  gitea_token = File.read(File.expand_path("~/Library/Application Support/tea/config.yml"))[/token:\s*(\S+)/, 1]
+
+  url "https://gitea.xetk.co.uk/xetk/zed/releases/download/nightly/Zed-Dev.dmg",
+      using:  :homebrew_curl,
+      header: "Authorization: token #{gitea_token}"
   name "Zed Dev"
   desc "Personal fork of Zed (window accent colors, unsent-draft flags, and more), built from xetk/zed main"
   homepage "https://gitea.xetk.co.uk/xetk/zed"
 
   auto_updates false
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   app "Zed Dev.app"
 
@@ -16,16 +23,14 @@ cask "zed-fork" do
   # push to main - `brew reinstall --cask zed-fork` picks up the latest build,
   # since `version :latest` + `sha256 :no_check` means `brew upgrade` won't
   # detect a change on its own.
-  postflight do
+  postflight_steps do
     system_command "/usr/bin/xattr",
                     args: ["-cr", "#{appdir}/Zed Dev.app"],
-                    sudo: false
+                    sudo:  false
   end
 
-  zap trash: [
-    "~/Library/Application Support/Zed Dev",
-    "~/Library/Caches/dev.zed.Zed-Dev",
-    "~/Library/Preferences/dev.zed.Zed-Dev.plist",
-    "~/Library/Saved Application State/dev.zed.Zed-Dev.savedState",
-  ]
+  # No `zap` block: this build intentionally shares its settings, database,
+  # and history with a regular Zed install (~/Library/Application
+  # Support/Zed, ~/.config/zed) rather than using an isolated profile, so
+  # uninstalling the fork must not touch that shared data.
 end

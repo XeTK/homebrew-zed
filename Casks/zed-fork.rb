@@ -8,7 +8,7 @@ cask "zed-fork" do
   gitea_token = File.read(File.expand_path("~/Library/Application Support/tea/config.yml"))[/token:\s*(\S+)/, 1]
 
   url "https://gitea.xetk.co.uk/xetk/zed/releases/download/nightly/Zed-Dev.dmg",
-      using:  :homebrew_curl,
+      using:  :curl,
       header: "Authorization: token #{gitea_token}"
   name "Zed Dev"
   desc "Personal fork of Zed (window accent colors, unsent-draft flags, and more), built from xetk/zed main"

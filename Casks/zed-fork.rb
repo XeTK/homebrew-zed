@@ -6,7 +6,7 @@ cask "zed-fork" do
   # always points at the newest build, and the host is public, so no token.
   url "https://zed.xetk.co.uk/nightly/Zed-xetk-nightly-aarch64.dmg"
   name "Zed xetk Nightly"
-  desc "Personal fork of Zed (window accent colors, unsent-draft flags, message timestamps, and more), built from xetk/zed main"
+  desc "Personal fork of Zed, built from xetk/zed main"
   homepage "https://gitea.xetk.co.uk/xetk/zed"
 
   # The app checks the signed feed at zed.xetk.co.uk itself, so Homebrew does

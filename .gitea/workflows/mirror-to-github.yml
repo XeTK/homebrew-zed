@@ -3,9 +3,15 @@
 # of truth: nothing is ever pulled back from GitHub, and the mirror is
 # overwritten on every push.
 #
-# Uses a write-only deploy key scoped to that one GitHub repo (secret
-# MIRROR_DEPLOY_KEY). Gitea's built-in push mirrors would need a GitHub token
-# and do not accept SSH remotes on this instance.
+# Uses a deploy key scoped to that one GitHub repo (secret MIRROR_DEPLOY_KEY).
+# Gitea's built-in push mirrors would need a GitHub token and do not accept SSH
+# remotes on this instance.
+#
+# Runs on linux-x86, not macos: this needs only git and ssh, and the single
+# Mac runner is routinely occupied for an hour or more by Zed/Mixxx builds, which
+# left the first mirror run queued behind them. Pushes over ssh.github.com:443
+# because outbound :22 is not guaranteed from every runner; the same job is proven
+# on linux-x86 for xetk/homebrew-mixxx.
 name: mirror-to-github
 
 on:
@@ -19,7 +25,7 @@ concurrency:
 
 jobs:
   mirror:
-    runs-on: macos
+    runs-on: linux-x86
     timeout-minutes: 10
     steps:
       - name: Check out repository
@@ -31,13 +37,18 @@ jobs:
         env:
           MIRROR_DEPLOY_KEY: ${{ secrets.MIRROR_DEPLOY_KEY }}
         run: |
-          key="$(mktemp)"
-          trap 'rm -f "${key}"' EXIT
-          printf '%s\n' "${MIRROR_DEPLOY_KEY}" > "${key}"
-          chmod 600 "${key}"
-          known_hosts="$(mktemp)"
+          set -euo pipefail
+          [ -n "${MIRROR_DEPLOY_KEY}" ] || { echo "MIRROR_DEPLOY_KEY is not set"; exit 1; }
+          umask 077
+          key="$(mktemp)"; known_hosts="$(mktemp)"
           trap 'rm -f "${key}" "${known_hosts}"' EXIT
-          # GitHub's published ed25519 host key, pinned rather than scanned.
-          echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "${known_hosts}"
-          GIT_SSH_COMMAND="ssh -i ${key} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${known_hosts}" \
-            git push --force git@github.com:XeTK/homebrew-zed.git HEAD:refs/heads/main
+          printf '%s\n' "${MIRROR_DEPLOY_KEY}" > "${key}"
+          # GitHub's host keys, fetched from its own API over TLS rather than scanned.
+          curl -fsS https://api.github.com/meta | python3 -c \
+            'import json,sys; [print("[ssh.github.com]:443 "+k) for k in json.load(sys.stdin)["ssh_keys"]]' > "${known_hosts}"
+          [ -s "${known_hosts}" ] || { echo "could not fetch GitHub host keys"; exit 1; }
+          export GIT_SSH_COMMAND="ssh -i ${key} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${known_hosts}"
+          # Always push Gitea's main (not HEAD), so a manual run from another branch can
+          # never publish that branch as the tap's main.
+          git push --force "ssh://git@ssh.github.com:443/XeTK/homebrew-zed.git" "refs/remotes/origin/main:refs/heads/main"
+          echo "mirrored $(git rev-parse --short origin/main) to github.com/XeTK/homebrew-zed"

@@ -1,0 +1,43 @@
+# Mirrors this repo to github.com/XeTK/homebrew-zed so `brew tap xetk/zed`
+# works without a URL and survives the homelab being down. Gitea is the source
+# of truth: nothing is ever pulled back from GitHub, and the mirror is
+# overwritten on every push.
+#
+# Uses a write-only deploy key scoped to that one GitHub repo (secret
+# MIRROR_DEPLOY_KEY). Gitea's built-in push mirrors would need a GitHub token
+# and do not accept SSH remotes on this instance.
+name: mirror-to-github
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: mirror-to-github
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: macos
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push main to GitHub
+        env:
+          MIRROR_DEPLOY_KEY: ${{ secrets.MIRROR_DEPLOY_KEY }}
+        run: |
+          key="$(mktemp)"
+          trap 'rm -f "${key}"' EXIT
+          printf '%s\n' "${MIRROR_DEPLOY_KEY}" > "${key}"
+          chmod 600 "${key}"
+          known_hosts="$(mktemp)"
+          trap 'rm -f "${key}" "${known_hosts}"' EXIT
+          # GitHub's published ed25519 host key, pinned rather than scanned.
+          echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "${known_hosts}"
+          GIT_SSH_COMMAND="ssh -i ${key} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${known_hosts}" \
+            git push --force git@github.com:XeTK/homebrew-zed.git HEAD:refs/heads/main
